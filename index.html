@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>个人 HTML 小工具</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --text: #17202a;
+      --muted: #64748b;
+      --line: #d8e0ea;
+      --accent: #1f7a6d;
+      --accent-soft: #e7f3f1;
+      --blue: #315f96;
+      --shadow: 0 18px 48px rgba(20, 35, 55, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      background:
+        linear-gradient(135deg, rgba(31, 122, 109, 0.1), rgba(49, 95, 150, 0.08)),
+        var(--bg);
+      color: var(--text);
+    }
+
+    main {
+      width: min(1040px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 48px 0;
+    }
+
+    header {
+      margin-bottom: 26px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(30px, 5vw, 48px);
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.7;
+    }
+
+    .tools {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .tool {
+      display: grid;
+      min-height: 220px;
+      padding: 22px;
+      color: inherit;
+      text-decoration: none;
+      background: var(--panel);
+      border: 1px solid rgba(216, 224, 234, 0.9);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+    }
+
+    .tool:hover {
+      transform: translateY(-3px);
+      border-color: rgba(31, 122, 109, 0.45);
+      box-shadow: 0 22px 58px rgba(20, 35, 55, 0.16);
+    }
+
+    .tool-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .mark {
+      display: grid;
+      place-items: center;
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      color: #ffffff;
+      background: var(--accent);
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .tool:nth-child(2) .mark {
+      background: var(--blue);
+    }
+
+    .open {
+      color: var(--accent);
+      background: var(--accent-soft);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 24px;
+      letter-spacing: 0;
+    }
+
+    .desc {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    footer {
+      margin-top: 24px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 720px) {
+      main {
+        width: min(100% - 20px, 1040px);
+        padding: 28px 0;
+      }
+
+      .tools {
+        grid-template-columns: 1fr;
+      }
+
+      .tool {
+        min-height: 190px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>个人 HTML 小工具</h1>
+      <p class="subtitle">一个可以直接部署到 GitHub Pages 的静态工具集合，所有工具都在浏览器本地运行。</p>
+    </header>
+
+    <section class="tools" aria-label="工具列表">
+      <a class="tool" href="./color.html">
+        <div class="tool-top">
+          <span class="mark">C</span>
+          <span class="open">打开工具</span>
+        </div>
+        <div>
+          <h2>颜色预览</h2>
+          <p class="desc">输入或选择颜色值，快速查看颜色效果，适合调试页面、组件和视觉稿中的色值。</p>
+        </div>
+      </a>
+
+      <a class="tool" href="./强类型密码生成器.html">
+        <div class="tool-top">
+          <span class="mark">P</span>
+          <span class="open">打开工具</span>
+        </div>
+        <div>
+          <h2>强类型密码生成器</h2>
+          <p class="desc">一次生成 10 个强密码，支持长度、大小写、数字和特殊符号配置，并可一键复制。</p>
+        </div>
+      </a>
+    </section>
+
+    <footer>建议仓库开启 GitHub Pages 后，从根目录直接发布。</footer>
+  </main>
+</body>
+</html>
