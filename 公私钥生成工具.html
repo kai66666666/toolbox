@@ -1,0 +1,950 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>公私钥生成工具</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f7fb;
+      --panel: #ffffff;
+      --text: #17202a;
+      --muted: #667085;
+      --line: #d9e2ec;
+      --accent: #1f7a6d;
+      --accent-dark: #176157;
+      --warn: #a23f22;
+      --code: #f8fafc;
+      --shadow: 0 18px 50px rgba(18, 38, 63, 0.12);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(135deg, rgba(31, 122, 109, 0.12), rgba(49, 95, 150, 0.08)),
+        var(--bg);
+      color: var(--text);
+    }
+
+    main {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 42px 0;
+    }
+
+    .header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 22px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 42px;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .home {
+      color: var(--accent-dark);
+      text-decoration: none;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid rgba(217, 226, 236, 0.85);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: minmax(150px, 0.8fr) minmax(220px, 1.2fr);
+      gap: 14px;
+      align-items: end;
+      padding: 20px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    label {
+      display: grid;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--text);
+      background: #ffffff;
+      outline: none;
+    }
+
+    input,
+    select {
+      min-height: 42px;
+      padding: 0 12px;
+      font-size: 16px;
+    }
+
+    textarea {
+      min-height: 150px;
+      resize: vertical;
+      padding: 12px;
+      background: var(--code);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(31, 122, 109, 0.14);
+    }
+
+    .actions,
+    .test-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfe;
+    }
+
+    button {
+      min-height: 42px;
+      border: 0;
+      border-radius: 6px;
+      padding: 0 16px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.12s ease, background-color 0.12s ease, box-shadow 0.12s ease;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.58;
+    }
+
+    button:active:not(:disabled) {
+      transform: translateY(1px);
+    }
+
+    .primary {
+      color: #ffffff;
+      background: var(--accent);
+      box-shadow: 0 8px 18px rgba(31, 122, 109, 0.22);
+    }
+
+    .primary:hover:not(:disabled) {
+      background: var(--accent-dark);
+    }
+
+    .secondary {
+      color: var(--accent-dark);
+      background: rgba(31, 122, 109, 0.1);
+    }
+
+    .secondary:hover:not(:disabled) {
+      background: rgba(31, 122, 109, 0.16);
+    }
+
+    .small {
+      min-height: 36px;
+      padding: 0 12px;
+      color: #243447;
+      background: #eef3f8;
+      font-size: 13px;
+    }
+
+    .small:hover:not(:disabled) {
+      background: #e1eaf3;
+    }
+
+    .status {
+      margin-left: auto;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .status.error {
+      color: var(--warn);
+      font-weight: 700;
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .meta-item {
+      min-width: 0;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--code);
+    }
+
+    .meta-label,
+    .block-title {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .meta-value {
+      display: block;
+      overflow-wrap: anywhere;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
+    .key-grid,
+    .test-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 0;
+      padding: 0;
+    }
+
+    .block {
+      min-width: 0;
+      padding: 20px;
+    }
+
+    .block + .block {
+      border-left: 1px solid var(--line);
+    }
+
+    .block-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .test {
+      border-top: 1px solid var(--line);
+    }
+
+    .test-title {
+      padding: 18px 20px 0;
+    }
+
+    .test-title h2 {
+      font-size: 20px;
+    }
+
+    .test-title p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .test-output {
+      min-height: 118px;
+    }
+
+    .hint {
+      padding: 14px 20px 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+      border-top: 1px solid var(--line);
+      background: #fbfcfe;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: none;
+      place-items: center;
+      padding: 20px;
+      background: rgba(15, 23, 42, 0.42);
+    }
+
+    .modal.open {
+      display: grid;
+    }
+
+    .dialog {
+      width: min(420px, 100%);
+      padding: 20px;
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+    }
+
+    .dialog h2 {
+      margin-bottom: 8px;
+      font-size: 20px;
+    }
+
+    .dialog p {
+      margin: 0 0 16px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .option-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .option {
+      min-height: 46px;
+      width: 100%;
+      text-align: left;
+      color: var(--text);
+      background: #f8fafc;
+      border: 1px solid var(--line);
+    }
+
+    .option:hover {
+      border-color: rgba(31, 122, 109, 0.45);
+      background: #eef8f6;
+    }
+
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 14px;
+    }
+
+    code {
+      padding: 2px 4px;
+      border-radius: 4px;
+      background: #edf2f7;
+      color: #243447;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+    }
+
+    @media (max-width: 860px) {
+      main {
+        width: min(100% - 20px, 1120px);
+        padding: 24px 0;
+      }
+
+      .header {
+        display: block;
+      }
+
+      h1 {
+        font-size: 32px;
+      }
+
+      .home {
+        display: inline-block;
+        margin-top: 12px;
+      }
+
+      .controls,
+      .meta,
+      .key-grid,
+      .test-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .block + .block {
+        border-top: 1px solid var(--line);
+        border-left: 0;
+      }
+
+      .status {
+        width: 100%;
+        margin-left: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="header">
+      <div>
+        <h1>公私钥生成工具</h1>
+        <p class="subtitle">生成一组 RSA 公钥和私钥，支持 PEM 导出、纯文本复制和加解密测试。</p>
+      </div>
+      <a class="home" href="./index.html">返回首页</a>
+    </div>
+
+    <section class="panel" aria-label="公私钥生成">
+      <div class="controls">
+        <label>
+          RSA 位数
+          <select id="sizeInput">
+            <option value="2048" selected>2048</option>
+            <option value="3072">3072</option>
+            <option value="4096">4096</option>
+          </select>
+        </label>
+
+        <label>
+          文件名前缀
+          <input id="prefixInput" type="text" value="rsa_key" maxlength="36" autocomplete="off" spellcheck="false">
+        </label>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="generateBtn" type="button">生成一组密钥</button>
+        <button class="secondary" id="copyPairBtn" type="button" disabled>复制整组纯文本</button>
+        <button class="secondary" id="downloadPairBtn" type="button" disabled>导出整组文本</button>
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+      </div>
+
+      <div class="meta">
+        <div class="meta-item">
+          <span class="meta-label">加密算法</span>
+          <span class="meta-value">RSA-OAEP + SHA-256</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">公钥格式</span>
+          <span class="meta-value">SubjectPublicKeyInfo PEM</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">私钥格式</span>
+          <span class="meta-value">PKCS#8 PEM</span>
+        </div>
+      </div>
+
+      <div class="key-grid">
+        <div class="block">
+          <div class="block-head">
+            <h2>公钥</h2>
+            <div class="button-row">
+              <button class="small" id="copyPublicBtn" type="button" disabled>复制公钥</button>
+              <button class="small" id="downloadPublicBtn" type="button" disabled>导出公钥</button>
+            </div>
+          </div>
+          <textarea id="publicKeyText" readonly spellcheck="false"></textarea>
+        </div>
+
+        <div class="block">
+          <div class="block-head">
+            <h2>私钥</h2>
+            <div class="button-row">
+              <button class="small" id="copyPrivateBtn" type="button" disabled>复制私钥</button>
+              <button class="small" id="downloadPrivateBtn" type="button" disabled>导出私钥</button>
+            </div>
+          </div>
+          <textarea id="privateKeyText" readonly spellcheck="false"></textarea>
+        </div>
+      </div>
+
+      <div class="test">
+        <div class="test-title">
+          <h2>加解密测试</h2>
+          <p>输入明文后用公钥加密，再用私钥解密，结果会在浏览器本地完成。</p>
+        </div>
+
+        <div class="test-grid">
+          <div class="block">
+            <span class="block-title">明文</span>
+            <textarea id="plainText" spellcheck="false">hello toolbox</textarea>
+          </div>
+
+          <div class="block">
+            <span class="block-title">解密结果</span>
+            <textarea class="test-output" id="decryptedText" readonly spellcheck="false"></textarea>
+          </div>
+        </div>
+
+        <div class="test-actions">
+          <button class="primary" id="encryptBtn" type="button" disabled>加密并解密测试</button>
+          <button class="secondary" id="copyCipherBtn" type="button" disabled>复制密文 Base64</button>
+          <div class="status" id="testStatus" role="status" aria-live="polite"></div>
+        </div>
+
+        <div class="block">
+          <span class="block-title">密文 Base64</span>
+          <textarea class="test-output" id="cipherText" readonly spellcheck="false"></textarea>
+        </div>
+      </div>
+
+      <div class="hint">
+        OpenSSL 加密示例：<code>openssl pkeyutl -encrypt -pubin -inkey rsa_key_public.pem -in data.txt -out cipher.bin -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256</code>。
+      </div>
+    </section>
+
+    <div class="modal" id="formatModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="dialog">
+        <h2 id="modalTitle">选择格式</h2>
+        <p id="modalDesc">请选择本次使用的格式。</p>
+        <div class="option-list" id="modalOptions"></div>
+        <div class="dialog-actions">
+          <button class="secondary" id="modalCancelBtn" type="button">取消</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const sizeInput = document.getElementById("sizeInput");
+    const prefixInput = document.getElementById("prefixInput");
+    const generateBtn = document.getElementById("generateBtn");
+    const copyPairBtn = document.getElementById("copyPairBtn");
+    const downloadPairBtn = document.getElementById("downloadPairBtn");
+    const copyPublicBtn = document.getElementById("copyPublicBtn");
+    const copyPrivateBtn = document.getElementById("copyPrivateBtn");
+    const downloadPublicBtn = document.getElementById("downloadPublicBtn");
+    const downloadPrivateBtn = document.getElementById("downloadPrivateBtn");
+    const publicKeyText = document.getElementById("publicKeyText");
+    const privateKeyText = document.getElementById("privateKeyText");
+    const plainText = document.getElementById("plainText");
+    const cipherText = document.getElementById("cipherText");
+    const decryptedText = document.getElementById("decryptedText");
+    const encryptBtn = document.getElementById("encryptBtn");
+    const copyCipherBtn = document.getElementById("copyCipherBtn");
+    const statusEl = document.getElementById("status");
+    const testStatusEl = document.getElementById("testStatus");
+    const formatModal = document.getElementById("formatModal");
+    const modalTitle = document.getElementById("modalTitle");
+    const modalDesc = document.getElementById("modalDesc");
+    const modalOptions = document.getElementById("modalOptions");
+    const modalCancelBtn = document.getElementById("modalCancelBtn");
+
+    let currentKeyPair = null;
+    let currentPem = null;
+    let currentModulusLength = null;
+
+    function setStatus(message, isError = false) {
+      statusEl.textContent = message;
+      statusEl.className = isError ? "status error" : "status";
+    }
+
+    function setTestStatus(message, isError = false) {
+      testStatusEl.textContent = message;
+      testStatusEl.className = isError ? "status error" : "status";
+    }
+
+    function sanitizePrefix(value) {
+      return value.trim().replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "") || "rsa_key";
+    }
+
+    function arrayBufferToBase64(buffer) {
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+
+      bytes.forEach((byte) => {
+        binary += String.fromCharCode(byte);
+      });
+
+      return btoa(binary);
+    }
+
+    function formatPem(label, buffer) {
+      const base64 = arrayBufferToBase64(buffer);
+      const lines = base64.match(/.{1,64}/g) || [];
+
+      return `-----BEGIN ${label}-----\n${lines.join("\n")}\n-----END ${label}-----\n`;
+    }
+
+    function stripPem(pem) {
+      return pem
+        .replace(/-----BEGIN [^-]+-----/g, "")
+        .replace(/-----END [^-]+-----/g, "")
+        .replace(/\s+/g, "");
+    }
+
+    function selectedKeyText(pem, format) {
+      return format === "raw" ? stripPem(pem) : pem;
+    }
+
+    function fileNames() {
+      const prefix = sanitizePrefix(prefixInput.value);
+
+      return {
+        publicName: `${prefix}_public.pem`,
+        privateName: `${prefix}_private.pem`,
+        publicTextName: `${prefix}_public.txt`,
+        privateTextName: `${prefix}_private.txt`,
+        pairName: `${prefix}_rsa_oaep_keys.txt`
+      };
+    }
+
+    function pairText(format = "pem") {
+      const names = fileNames();
+      const publicKey = selectedKeyText(currentPem.publicPem, format).trimEnd();
+      const privateKey = selectedKeyText(currentPem.privatePem, format).trimEnd();
+      const label = format === "raw" ? "raw base64" : "pem";
+
+      return [
+        `# ${names.publicName} ${label}`,
+        publicKey,
+        "",
+        `# ${names.privateName} ${label}`,
+        privateKey
+      ].join("\n");
+    }
+
+    function fullText(kind) {
+      const names = fileNames();
+
+      if (kind === "public") {
+        return [`# ${names.publicName}`, currentPem.publicPem.trimEnd()].join("\n");
+      }
+
+      if (kind === "private") {
+        return [`# ${names.privateName}`, currentPem.privatePem.trimEnd()].join("\n");
+      }
+
+      return pairText("pem");
+    }
+
+    function exportText(kind, format) {
+      if (kind === "public") {
+        if (format === "raw") {
+          return stripPem(currentPem.publicPem);
+        }
+
+        return format === "full" ? fullText("public") : currentPem.publicPem;
+      }
+
+      if (kind === "private") {
+        if (format === "raw") {
+          return stripPem(currentPem.privatePem);
+        }
+
+        return format === "full" ? fullText("private") : currentPem.privatePem;
+      }
+
+      return format === "full" ? fullText("pair") : pairText(format === "raw" ? "raw" : "pem");
+    }
+
+    function exportFilename(kind, format) {
+      const names = fileNames();
+
+      if (kind === "public") {
+        return format === "pem" ? names.publicName : names.publicTextName;
+      }
+
+      if (kind === "private") {
+        return format === "pem" ? names.privateName : names.privateTextName;
+      }
+
+      return names.pairName;
+    }
+
+    function closeFormatModal(resolve, value = null) {
+      formatModal.classList.remove("open");
+      modalOptions.innerHTML = "";
+      resolve(value);
+    }
+
+    function chooseFormat(title, desc, options) {
+      return new Promise((resolve) => {
+        modalTitle.textContent = title;
+        modalDesc.textContent = desc;
+        modalOptions.innerHTML = "";
+
+        function finish(value = null) {
+          modalCancelBtn.removeEventListener("click", cancel);
+          formatModal.removeEventListener("click", onBackdropClick);
+          document.removeEventListener("keydown", onKeydown);
+          closeFormatModal(resolve, value);
+        }
+
+        options.forEach((option) => {
+          const button = document.createElement("button");
+          button.className = "option";
+          button.type = "button";
+          button.textContent = option.label;
+          button.addEventListener("click", () => finish(option.value));
+          modalOptions.append(button);
+        });
+
+        function cancel() {
+          finish();
+        }
+
+        function onBackdropClick(event) {
+          if (event.target === formatModal) {
+            cancel();
+          }
+        }
+
+        function onKeydown(event) {
+          if (event.key === "Escape") {
+            cancel();
+          }
+        }
+
+        modalCancelBtn.addEventListener("click", cancel);
+        formatModal.addEventListener("click", onBackdropClick);
+        document.addEventListener("keydown", onKeydown);
+        formatModal.classList.add("open");
+      });
+    }
+
+    async function chooseCopyFormat() {
+      return chooseFormat(
+        "选择复制格式",
+        "本次复制使用哪种密钥文本格式？",
+        [
+          { value: "pem", label: "完整 PEM" },
+          { value: "raw", label: "裸 Base64" }
+        ]
+      );
+    }
+
+    async function chooseExportFormat() {
+      return chooseFormat(
+        "选择导出格式",
+        "本次导出使用哪种文件内容格式？",
+        [
+          { value: "pem", label: "PEM 格式" },
+          { value: "full", label: "全文本格式" },
+          { value: "raw", label: "裸文本格式" }
+        ]
+      );
+    }
+
+    function downloadText(filename, text) {
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = filename;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    async function copyText(text, successMessage, isTest = false) {
+      try {
+        await navigator.clipboard.writeText(text);
+        if (isTest) {
+          setTestStatus(successMessage);
+        } else {
+          setStatus(successMessage);
+        }
+      } catch (error) {
+        if (isTest) {
+          setTestStatus("复制失败，请手动选中复制。", true);
+        } else {
+          setStatus("复制失败，请手动选中复制。", true);
+        }
+      }
+    }
+
+    function setButtons(enabled) {
+      copyPairBtn.disabled = !enabled;
+      downloadPairBtn.disabled = !enabled;
+      copyPublicBtn.disabled = !enabled;
+      copyPrivateBtn.disabled = !enabled;
+      downloadPublicBtn.disabled = !enabled;
+      downloadPrivateBtn.disabled = !enabled;
+      encryptBtn.disabled = !enabled;
+    }
+
+    async function generateKeys() {
+      if (!window.crypto || !crypto.subtle) {
+        setStatus("当前环境不支持 Web Crypto，请用 HTTPS 或 localhost 打开。", true);
+        return;
+      }
+
+      const size = Number.parseInt(sizeInput.value, 10);
+      if (![2048, 3072, 4096].includes(size)) {
+        setStatus("请选择有效的 RSA 位数。", true);
+        return;
+      }
+
+      currentKeyPair = null;
+      currentPem = null;
+      currentModulusLength = null;
+      publicKeyText.value = "";
+      privateKeyText.value = "";
+      cipherText.value = "";
+      decryptedText.value = "";
+      setButtons(false);
+      generateBtn.disabled = true;
+      setStatus("正在生成一组密钥...");
+      setTestStatus("");
+
+      try {
+        currentKeyPair = await crypto.subtle.generateKey(
+          {
+            name: "RSA-OAEP",
+            modulusLength: size,
+            publicExponent: new Uint8Array([1, 0, 1]),
+            hash: "SHA-256"
+          },
+          true,
+          ["encrypt", "decrypt"]
+        );
+
+        const publicBuffer = await crypto.subtle.exportKey("spki", currentKeyPair.publicKey);
+        const privateBuffer = await crypto.subtle.exportKey("pkcs8", currentKeyPair.privateKey);
+
+        currentPem = {
+          publicPem: formatPem("PUBLIC KEY", publicBuffer),
+          privatePem: formatPem("PRIVATE KEY", privateBuffer)
+        };
+        currentModulusLength = size;
+        publicKeyText.value = currentPem.publicPem;
+        privateKeyText.value = currentPem.privatePem;
+        setButtons(true);
+        setStatus(`已生成一组 RSA-${size} 加解密密钥。`);
+      } catch (error) {
+        setStatus("生成失败，请检查浏览器是否支持 RSA-OAEP。", true);
+      } finally {
+        generateBtn.disabled = false;
+      }
+    }
+
+    async function runEncryptTest() {
+      if (!currentKeyPair) {
+        setTestStatus("请先生成密钥。", true);
+        return;
+      }
+
+      const text = plainText.value;
+      if (!text) {
+        setTestStatus("请输入明文。", true);
+        return;
+      }
+
+      encryptBtn.disabled = true;
+      copyCipherBtn.disabled = true;
+      setTestStatus("正在加密并解密...");
+
+      try {
+        const encoded = new TextEncoder().encode(text);
+        const encrypted = await crypto.subtle.encrypt(
+          { name: "RSA-OAEP" },
+          currentKeyPair.publicKey,
+          encoded
+        );
+        const decrypted = await crypto.subtle.decrypt(
+          { name: "RSA-OAEP" },
+          currentKeyPair.privateKey,
+          encrypted
+        );
+
+        cipherText.value = arrayBufferToBase64(encrypted);
+        decryptedText.value = new TextDecoder().decode(decrypted);
+        copyCipherBtn.disabled = false;
+        setTestStatus(decryptedText.value === text ? "加解密测试通过。" : "已解密，但结果与明文不一致。", decryptedText.value !== text);
+      } catch (error) {
+        if (currentModulusLength) {
+          const maxBytes = Math.floor(currentModulusLength / 8) - 66;
+          setTestStatus(`加密失败。RSA-OAEP 明文长度不能超过约 ${maxBytes} 字节。`, true);
+        } else {
+          setTestStatus("加密失败，请检查明文长度。", true);
+        }
+      } finally {
+        encryptBtn.disabled = false;
+      }
+    }
+
+    generateBtn.addEventListener("click", generateKeys);
+    encryptBtn.addEventListener("click", runEncryptTest);
+    copyCipherBtn.addEventListener("click", () => copyText(cipherText.value, "已复制密文 Base64。", true));
+    copyPairBtn.addEventListener("click", async () => {
+      const format = await chooseCopyFormat();
+      if (format) {
+        copyText(pairText(format), "已按所选格式复制整组密钥。");
+      }
+    });
+
+    copyPublicBtn.addEventListener("click", async () => {
+      const format = await chooseCopyFormat();
+      if (format) {
+        copyText(selectedKeyText(currentPem.publicPem, format), "已按所选格式复制公钥。");
+      }
+    });
+
+    copyPrivateBtn.addEventListener("click", async () => {
+      const format = await chooseCopyFormat();
+      if (format) {
+        copyText(selectedKeyText(currentPem.privatePem, format), "已按所选格式复制私钥。");
+      }
+    });
+
+    downloadPairBtn.addEventListener("click", async () => {
+      const format = await chooseExportFormat();
+      if (format) {
+        downloadText(exportFilename("pair", format), exportText("pair", format));
+        setStatus("已按所选格式导出整组密钥。");
+      }
+    });
+
+    downloadPublicBtn.addEventListener("click", async () => {
+      const format = await chooseExportFormat();
+      if (format) {
+        downloadText(exportFilename("public", format), exportText("public", format));
+        setStatus("已按所选格式导出公钥。");
+      }
+    });
+
+    downloadPrivateBtn.addEventListener("click", async () => {
+      const format = await chooseExportFormat();
+      if (format) {
+        downloadText(exportFilename("private", format), exportText("private", format));
+        setStatus("已按所选格式导出私钥。");
+      }
+    });
+
+    generateKeys();
+  </script>
+</body>
+</html>
