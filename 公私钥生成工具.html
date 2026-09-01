@@ -78,7 +78,7 @@
 
     .controls {
       display: grid;
-      grid-template-columns: minmax(150px, 0.8fr) minmax(220px, 1.2fr);
+      grid-template-columns: minmax(150px, 0.8fr);
       gap: 14px;
       align-items: end;
       padding: 20px;
@@ -345,21 +345,63 @@
 
     .option-list {
       display: grid;
-      gap: 10px;
+      gap: 8px;
+    }
+
+    .modal-field {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding: 12px;
+      border: 1px solid #c8d2df;
+      border-radius: 8px;
+      background: #ffffff;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .modal-field input {
+      min-height: 44px;
+      border-color: #98a7b8;
+      background: #ffffff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .format-caption {
+      margin: 2px 0 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
     }
 
     .option {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
       min-height: 46px;
       width: 100%;
       text-align: left;
       color: var(--text);
       background: #f8fafc;
       border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
     }
 
     .option:hover {
       border-color: rgba(31, 122, 109, 0.45);
       background: #eef8f6;
+    }
+
+    .option::after {
+      content: "选择";
+      color: var(--accent-dark);
+      font-size: 12px;
+      font-weight: 700;
     }
 
     .dialog-actions {
@@ -434,11 +476,6 @@
             <option value="3072">3072</option>
             <option value="4096">4096</option>
           </select>
-        </label>
-
-        <label>
-          文件名前缀
-          <input id="prefixInput" type="text" value="rsa_key" maxlength="36" autocomplete="off" spellcheck="false">
         </label>
       </div>
 
@@ -537,7 +574,6 @@
 
   <script>
     const sizeInput = document.getElementById("sizeInput");
-    const prefixInput = document.getElementById("prefixInput");
     const generateBtn = document.getElementById("generateBtn");
     const copyPairBtn = document.getElementById("copyPairBtn");
     const downloadPairBtn = document.getElementById("downloadPairBtn");
@@ -563,6 +599,7 @@
     let currentKeyPair = null;
     let currentPem = null;
     let currentModulusLength = null;
+    let exportPrefix = "rsa_key";
 
     function setStatus(message, isError = false) {
       statusEl.textContent = message;
@@ -575,7 +612,10 @@
     }
 
     function sanitizePrefix(value) {
-      return value.trim().replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "") || "rsa_key";
+      return value
+        .trim()
+        .replace(/[^\p{L}\p{N}_.-]+/gu, "_")
+        .replace(/^_+|_+$/g, "") || "rsa_key";
     }
 
     function arrayBufferToBase64(buffer) {
@@ -607,9 +647,7 @@
       return format === "raw" ? stripPem(pem) : pem;
     }
 
-    function fileNames() {
-      const prefix = sanitizePrefix(prefixInput.value);
-
+    function fileNames(prefix = exportPrefix) {
       return {
         publicName: `${prefix}_public.pem`,
         privateName: `${prefix}_private.pem`,
@@ -619,8 +657,8 @@
       };
     }
 
-    function pairText(format = "pem") {
-      const names = fileNames();
+    function pairText(format = "pem", prefix = exportPrefix) {
+      const names = fileNames(prefix);
       const publicKey = selectedKeyText(currentPem.publicPem, format).trimEnd();
       const privateKey = selectedKeyText(currentPem.privatePem, format).trimEnd();
       const label = format === "raw" ? "raw base64" : "pem";
@@ -634,8 +672,8 @@
       ].join("\n");
     }
 
-    function fullText(kind) {
-      const names = fileNames();
+    function fullText(kind, prefix = exportPrefix) {
+      const names = fileNames(prefix);
 
       if (kind === "public") {
         return [`# ${names.publicName}`, currentPem.publicPem.trimEnd()].join("\n");
@@ -645,16 +683,16 @@
         return [`# ${names.privateName}`, currentPem.privatePem.trimEnd()].join("\n");
       }
 
-      return pairText("pem");
+      return pairText("pem", prefix);
     }
 
-    function exportText(kind, format) {
+    function exportText(kind, format, prefix) {
       if (kind === "public") {
         if (format === "raw") {
           return stripPem(currentPem.publicPem);
         }
 
-        return format === "full" ? fullText("public") : currentPem.publicPem;
+        return format === "full" ? fullText("public", prefix) : currentPem.publicPem;
       }
 
       if (kind === "private") {
@@ -662,14 +700,14 @@
           return stripPem(currentPem.privatePem);
         }
 
-        return format === "full" ? fullText("private") : currentPem.privatePem;
+        return format === "full" ? fullText("private", prefix) : currentPem.privatePem;
       }
 
-      return format === "full" ? fullText("pair") : pairText(format === "raw" ? "raw" : "pem");
+      return format === "full" ? fullText("pair", prefix) : pairText(format === "raw" ? "raw" : "pem", prefix);
     }
 
-    function exportFilename(kind, format) {
-      const names = fileNames();
+    function exportFilename(kind, format, prefix) {
+      const names = fileNames(prefix);
 
       if (kind === "public") {
         return format === "pem" ? names.publicName : names.publicTextName;
@@ -688,13 +726,39 @@
       resolve(value);
     }
 
-    function chooseFormat(title, desc, options) {
+    function chooseFormat(title, desc, options, withPrefix = false) {
       return new Promise((resolve) => {
         modalTitle.textContent = title;
         modalDesc.textContent = desc;
         modalOptions.innerHTML = "";
 
+        if (withPrefix) {
+          const field = document.createElement("label");
+          field.className = "modal-field";
+          field.textContent = "文件名前缀";
+
+          const input = document.createElement("input");
+          input.id = "modalPrefixInput";
+          input.type = "text";
+          input.value = exportPrefix;
+          input.maxLength = 36;
+          input.autocomplete = "off";
+          input.spellcheck = false;
+          field.append(input);
+          modalOptions.append(field);
+
+          const caption = document.createElement("div");
+          caption.className = "format-caption";
+          caption.textContent = "导出内容格式";
+          modalOptions.append(caption);
+        }
+
         function finish(value = null) {
+          const prefixInput = document.getElementById("modalPrefixInput");
+          if (value && prefixInput) {
+            exportPrefix = sanitizePrefix(prefixInput.value);
+          }
+
           modalCancelBtn.removeEventListener("click", cancel);
           formatModal.removeEventListener("click", onBackdropClick);
           document.removeEventListener("keydown", onKeydown);
@@ -744,16 +808,19 @@
       );
     }
 
-    async function chooseExportFormat() {
-      return chooseFormat(
+    async function chooseExportOptions() {
+      const format = await chooseFormat(
         "选择导出格式",
-        "本次导出使用哪种文件内容格式？",
+        "先填写文件名前缀，再选择本次导出的文件内容格式。",
         [
           { value: "pem", label: "PEM 格式" },
           { value: "full", label: "全文本格式" },
           { value: "raw", label: "裸文本格式" }
-        ]
+        ],
+        true
       );
+
+      return format ? { format, prefix: exportPrefix } : null;
     }
 
     function downloadText(filename, text) {
@@ -921,25 +988,25 @@
     });
 
     downloadPairBtn.addEventListener("click", async () => {
-      const format = await chooseExportFormat();
-      if (format) {
-        downloadText(exportFilename("pair", format), exportText("pair", format));
+      const options = await chooseExportOptions();
+      if (options) {
+        downloadText(exportFilename("pair", options.format, options.prefix), exportText("pair", options.format, options.prefix));
         setStatus("已按所选格式导出整组密钥。");
       }
     });
 
     downloadPublicBtn.addEventListener("click", async () => {
-      const format = await chooseExportFormat();
-      if (format) {
-        downloadText(exportFilename("public", format), exportText("public", format));
+      const options = await chooseExportOptions();
+      if (options) {
+        downloadText(exportFilename("public", options.format, options.prefix), exportText("public", options.format, options.prefix));
         setStatus("已按所选格式导出公钥。");
       }
     });
 
     downloadPrivateBtn.addEventListener("click", async () => {
-      const format = await chooseExportFormat();
-      if (format) {
-        downloadText(exportFilename("private", format), exportText("private", format));
+      const options = await chooseExportOptions();
+      if (options) {
+        downloadText(exportFilename("private", options.format, options.prefix), exportText("private", options.format, options.prefix));
         setStatus("已按所选格式导出私钥。");
       }
     });
