@@ -7,7 +7,7 @@
 - `color-preview.html`：颜色预览工具
 - `password-generator.html`：一次生成 10 个强类型密码
 - `timestamp-converter.html`：Unix 时间戳与常用日期时间格式双向转换
-- `rsa-key-generator.html`：生成或输入一组 RSA 公钥私钥，支持格式化复制、三种导出格式和加解密测试
+- `rsa-key-generator.html`：生成或输入一组 RSA 公钥私钥，支持加解密、SHA256withRSA 签名验签、导出和复制
 - `codec-hash.html`：常见编码解码与 SHA-256 摘要工具
 
 ## GitHub Pages 发布方式

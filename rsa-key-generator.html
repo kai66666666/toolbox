@@ -207,7 +207,7 @@
 
     .meta {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 10px;
       padding: 16px 20px;
       border-bottom: 1px solid var(--line);
@@ -481,7 +481,7 @@
     <div class="header">
       <div>
         <h1>公私钥生成工具</h1>
-        <p class="subtitle">生成或输入一组 RSA 公钥和私钥，支持 PEM 导出、纯文本复制和加解密测试。</p>
+        <p class="subtitle">生成或输入一组 RSA 公钥和私钥，支持加解密、SHA256withRSA 签名验签、导出和复制。</p>
       </div>
       <a class="home" href="./index.html">返回首页</a>
     </div>
@@ -509,6 +509,10 @@
         <div class="meta-item">
           <span class="meta-label">加密算法</span>
           <span class="meta-value">RSA-OAEP + SHA-256</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">签名算法</span>
+          <span class="meta-value">SHA256withRSA / RSASSA-PKCS1-v1_5</span>
         </div>
         <div class="meta-item">
           <span class="meta-label">公钥格式</span>
@@ -578,8 +582,37 @@
         </div>
       </div>
 
+      <div class="test">
+        <div class="test-title">
+          <h2>签名验签测试</h2>
+          <p>使用 SHA256withRSA，也就是 RSASSA-PKCS1-v1_5 + SHA-256，不使用 PSS。</p>
+        </div>
+
+        <div class="test-grid">
+          <div class="block">
+            <div class="title-row">
+              <span class="block-title">待签名/验签内容</span>
+              <span class="length-info" id="signLength">0 字符 / 0 字节</span>
+            </div>
+            <textarea id="signDataText" spellcheck="false">hello toolbox</textarea>
+          </div>
+
+          <div class="block">
+            <span class="block-title">签名 Base64</span>
+            <textarea class="test-output" id="signatureText" spellcheck="false" placeholder="可粘贴签名 Base64 后点击公钥验签"></textarea>
+          </div>
+        </div>
+
+        <div class="test-actions">
+          <button class="primary" id="signBtn" type="button" disabled>私钥签名</button>
+          <button class="secondary" id="verifyBtn" type="button" disabled>公钥验签</button>
+          <button class="secondary" id="copySignatureBtn" type="button" disabled>复制签名 Base64</button>
+          <div class="status" id="signStatus" role="status" aria-live="polite"></div>
+        </div>
+      </div>
+
       <div class="hint">
-        OpenSSL 加密示例：<code>openssl pkeyutl -encrypt -pubin -inkey rsa_key_public.pem -in data.txt -out cipher.bin -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256</code>。
+        OpenSSL 验签示例：<code>openssl dgst -sha256 -verify rsa_key_public.pem -signature sign.bin data.txt</code>。
       </div>
     </section>
 
@@ -610,11 +643,18 @@
     const plainLength = document.getElementById("plainLength");
     const cipherText = document.getElementById("cipherText");
     const decryptedText = document.getElementById("decryptedText");
+    const signDataText = document.getElementById("signDataText");
+    const signLength = document.getElementById("signLength");
+    const signatureText = document.getElementById("signatureText");
     const encryptBtn = document.getElementById("encryptBtn");
     const decryptBtn = document.getElementById("decryptBtn");
     const copyCipherBtn = document.getElementById("copyCipherBtn");
+    const signBtn = document.getElementById("signBtn");
+    const verifyBtn = document.getElementById("verifyBtn");
+    const copySignatureBtn = document.getElementById("copySignatureBtn");
     const statusEl = document.getElementById("status");
     const testStatusEl = document.getElementById("testStatus");
+    const signStatusEl = document.getElementById("signStatus");
     const formatModal = document.getElementById("formatModal");
     const modalTitle = document.getElementById("modalTitle");
     const modalDesc = document.getElementById("modalDesc");
@@ -622,6 +662,7 @@
     const modalCancelBtn = document.getElementById("modalCancelBtn");
 
     let currentKeyPair = null;
+    let currentSignKeyPair = null;
     let currentPem = null;
     let currentModulusLength = null;
     let exportPrefix = "rsa_key";
@@ -636,6 +677,11 @@
       testStatusEl.className = isError ? "status error" : "status";
     }
 
+    function setSignStatus(message, isError = false) {
+      signStatusEl.textContent = message;
+      signStatusEl.className = isError ? "status error" : "status";
+    }
+
     function sanitizePrefix(value) {
       return value
         .trim()
@@ -648,6 +694,13 @@
       const chars = Array.from(text).length;
       const bytes = new TextEncoder().encode(text).length;
       plainLength.textContent = `${chars} 字符 / ${bytes} 字节`;
+    }
+
+    function updateSignLength() {
+      const text = signDataText.value;
+      const chars = Array.from(text).length;
+      const bytes = new TextEncoder().encode(text).length;
+      signLength.textContent = `${chars} 字符 / ${bytes} 字节`;
     }
 
     function arrayBufferToBase64(buffer) {
@@ -750,6 +803,39 @@
         return currentKeyPair;
       } catch (error) {
         setTestStatus("密钥导入失败，请确认公私钥格式、算法和配对关系。", true);
+        return null;
+      }
+    }
+
+    async function importCurrentSignKeyPair() {
+      const pem = syncCurrentPem(false);
+
+      if (!pem || !pem.publicPem || !pem.privatePem) {
+        setSignStatus("请同时输入公钥和私钥。", true);
+        return null;
+      }
+
+      try {
+        const publicKey = await crypto.subtle.importKey(
+          "spki",
+          base64ToArrayBuffer(stripPem(pem.publicPem)),
+          { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+          true,
+          ["verify"]
+        );
+        const privateKey = await crypto.subtle.importKey(
+          "pkcs8",
+          base64ToArrayBuffer(stripPem(pem.privatePem)),
+          { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+          true,
+          ["sign"]
+        );
+
+        currentSignKeyPair = { publicKey, privateKey };
+        currentModulusLength = publicKey.algorithm.modulusLength || currentModulusLength;
+        return currentSignKeyPair;
+      } catch (error) {
+        setSignStatus("密钥导入失败，请确认公私钥格式和配对关系。", true);
         return null;
       }
     }
@@ -998,12 +1084,16 @@
       downloadPrivateBtn.disabled = !enabled;
       encryptBtn.disabled = !enabled;
       decryptBtn.disabled = !enabled;
+      signBtn.disabled = !enabled;
+      verifyBtn.disabled = !enabled;
     }
 
     function refreshButtonState() {
       const hasPublic = publicKeyText.value.trim().length > 0;
       const hasPrivate = privateKeyText.value.trim().length > 0;
       const hasCipher = cipherText.value.trim().length > 0;
+      const hasSignature = signatureText.value.trim().length > 0;
+      const hasSignData = signDataText.value.length > 0;
 
       copyPublicBtn.disabled = !hasPublic;
       downloadPublicBtn.disabled = !hasPublic;
@@ -1014,6 +1104,9 @@
       encryptBtn.disabled = !(hasPublic && hasPrivate);
       decryptBtn.disabled = !(hasPublic && hasPrivate && hasCipher);
       copyCipherBtn.disabled = !hasCipher;
+      signBtn.disabled = !(hasPublic && hasPrivate && hasSignData);
+      verifyBtn.disabled = !(hasPublic && hasPrivate && hasSignature && hasSignData);
+      copySignatureBtn.disabled = !hasSignature;
     }
 
     async function generateKeys() {
@@ -1029,31 +1122,34 @@
       }
 
       currentKeyPair = null;
+      currentSignKeyPair = null;
       currentPem = null;
       currentModulusLength = null;
       publicKeyText.value = "";
       privateKeyText.value = "";
       cipherText.value = "";
       decryptedText.value = "";
+      signatureText.value = "";
       setButtons(false);
       generateBtn.disabled = true;
       setStatus("正在生成一组密钥...");
       setTestStatus("");
+      setSignStatus("");
 
       try {
-        currentKeyPair = await crypto.subtle.generateKey(
+        currentSignKeyPair = await crypto.subtle.generateKey(
           {
-            name: "RSA-OAEP",
+            name: "RSASSA-PKCS1-v1_5",
             modulusLength: size,
             publicExponent: new Uint8Array([1, 0, 1]),
             hash: "SHA-256"
           },
           true,
-          ["encrypt", "decrypt"]
+          ["sign", "verify"]
         );
 
-        const publicBuffer = await crypto.subtle.exportKey("spki", currentKeyPair.publicKey);
-        const privateBuffer = await crypto.subtle.exportKey("pkcs8", currentKeyPair.privateKey);
+        const publicBuffer = await crypto.subtle.exportKey("spki", currentSignKeyPair.publicKey);
+        const privateBuffer = await crypto.subtle.exportKey("pkcs8", currentSignKeyPair.privateKey);
 
         currentPem = {
           publicPem: formatPem("PUBLIC KEY", publicBuffer),
@@ -1062,10 +1158,11 @@
         currentModulusLength = size;
         publicKeyText.value = currentPem.publicPem;
         privateKeyText.value = currentPem.privatePem;
+        await importCurrentKeyPair();
         refreshButtonState();
-        setStatus(`已生成一组 RSA-${size} 加解密密钥。`);
+        setStatus(`已生成一组 RSA-${size} 密钥。`);
       } catch (error) {
-        setStatus("生成失败，请检查浏览器是否支持 RSA-OAEP。", true);
+        setStatus("生成失败，请检查浏览器是否支持 RSA 密钥生成。", true);
       } finally {
         generateBtn.disabled = false;
       }
@@ -1143,22 +1240,104 @@
       }
     }
 
+    async function runSign() {
+      const keyPair = await importCurrentSignKeyPair();
+      if (!keyPair) {
+        return;
+      }
+
+      const text = signDataText.value;
+      if (!text) {
+        setSignStatus("请输入待签名内容。", true);
+        return;
+      }
+
+      signBtn.disabled = true;
+      setSignStatus("正在签名...");
+
+      try {
+        const signature = await crypto.subtle.sign(
+          { name: "RSASSA-PKCS1-v1_5" },
+          keyPair.privateKey,
+          new TextEncoder().encode(text)
+        );
+
+        signatureText.value = arrayBufferToBase64(signature);
+        refreshButtonState();
+        setSignStatus("私钥签名完成。");
+      } catch (error) {
+        setSignStatus("签名失败，请检查私钥格式。", true);
+      } finally {
+        signBtn.disabled = false;
+        refreshButtonState();
+      }
+    }
+
+    async function runVerify() {
+      const keyPair = await importCurrentSignKeyPair();
+      if (!keyPair) {
+        return;
+      }
+
+      const text = signDataText.value;
+      const signature = signatureText.value.trim();
+
+      if (!text) {
+        setSignStatus("请输入待验签内容。", true);
+        return;
+      }
+
+      if (!signature) {
+        setSignStatus("请输入签名 Base64。", true);
+        return;
+      }
+
+      verifyBtn.disabled = true;
+      setSignStatus("正在验签...");
+
+      try {
+        const verified = await crypto.subtle.verify(
+          { name: "RSASSA-PKCS1-v1_5" },
+          keyPair.publicKey,
+          base64ToArrayBuffer(signature),
+          new TextEncoder().encode(text)
+        );
+
+        setSignStatus(verified ? "验签通过。" : "验签失败：签名与内容不匹配。", !verified);
+      } catch (error) {
+        setSignStatus("验签失败，请检查签名 Base64 或公钥格式。", true);
+      } finally {
+        verifyBtn.disabled = false;
+        refreshButtonState();
+      }
+    }
+
     generateBtn.addEventListener("click", generateKeys);
     publicKeyText.addEventListener("input", () => {
       currentKeyPair = null;
+      currentSignKeyPair = null;
       currentModulusLength = null;
       refreshButtonState();
     });
     privateKeyText.addEventListener("input", () => {
       currentKeyPair = null;
+      currentSignKeyPair = null;
       currentModulusLength = null;
       refreshButtonState();
     });
     plainText.addEventListener("input", updatePlainLength);
     cipherText.addEventListener("input", refreshButtonState);
+    signDataText.addEventListener("input", () => {
+      updateSignLength();
+      refreshButtonState();
+    });
+    signatureText.addEventListener("input", refreshButtonState);
     encryptBtn.addEventListener("click", runEncrypt);
     decryptBtn.addEventListener("click", runDecrypt);
+    signBtn.addEventListener("click", runSign);
+    verifyBtn.addEventListener("click", runVerify);
     copyCipherBtn.addEventListener("click", () => copyText(cipherText.value, "已复制密文 Base64。", true));
+    copySignatureBtn.addEventListener("click", () => copyText(signatureText.value, "已复制签名 Base64。"));
     copyPairBtn.addEventListener("click", async () => {
       const format = await chooseCopyFormat();
       if (format) {
@@ -1223,6 +1402,7 @@
     });
 
     updatePlainLength();
+    updateSignLength();
     generateKeys();
   </script>
 </body>
