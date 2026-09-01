@@ -547,7 +547,7 @@
       <div class="test">
         <div class="test-title">
           <h2>加解密测试</h2>
-          <p>输入明文后用公钥加密，再用私钥解密，结果会在浏览器本地完成。</p>
+          <p>可以输入明文用公钥加密，也可以输入密文 Base64 用私钥解密，结果会在浏览器本地完成。</p>
         </div>
 
         <div class="test-grid">
@@ -566,14 +566,15 @@
         </div>
 
         <div class="test-actions">
-          <button class="primary" id="encryptBtn" type="button" disabled>加密并解密测试</button>
+          <button class="primary" id="encryptBtn" type="button" disabled>明文加密</button>
+          <button class="secondary" id="decryptBtn" type="button" disabled>密文解密</button>
           <button class="secondary" id="copyCipherBtn" type="button" disabled>复制密文 Base64</button>
           <div class="status" id="testStatus" role="status" aria-live="polite"></div>
         </div>
 
         <div class="block">
           <span class="block-title">密文 Base64</span>
-          <textarea class="test-output" id="cipherText" readonly spellcheck="false"></textarea>
+          <textarea class="test-output" id="cipherText" spellcheck="false" placeholder="可粘贴密文 Base64 后点击密文解密"></textarea>
         </div>
       </div>
 
@@ -610,6 +611,7 @@
     const cipherText = document.getElementById("cipherText");
     const decryptedText = document.getElementById("decryptedText");
     const encryptBtn = document.getElementById("encryptBtn");
+    const decryptBtn = document.getElementById("decryptBtn");
     const copyCipherBtn = document.getElementById("copyCipherBtn");
     const statusEl = document.getElementById("status");
     const testStatusEl = document.getElementById("testStatus");
@@ -995,11 +997,13 @@
       downloadPublicBtn.disabled = !enabled;
       downloadPrivateBtn.disabled = !enabled;
       encryptBtn.disabled = !enabled;
+      decryptBtn.disabled = !enabled;
     }
 
     function refreshButtonState() {
       const hasPublic = publicKeyText.value.trim().length > 0;
       const hasPrivate = privateKeyText.value.trim().length > 0;
+      const hasCipher = cipherText.value.trim().length > 0;
 
       copyPublicBtn.disabled = !hasPublic;
       downloadPublicBtn.disabled = !hasPublic;
@@ -1008,6 +1012,8 @@
       copyPairBtn.disabled = !(hasPublic && hasPrivate);
       downloadPairBtn.disabled = !(hasPublic && hasPrivate);
       encryptBtn.disabled = !(hasPublic && hasPrivate);
+      decryptBtn.disabled = !(hasPublic && hasPrivate && hasCipher);
+      copyCipherBtn.disabled = !hasCipher;
     }
 
     async function generateKeys() {
@@ -1065,7 +1071,7 @@
       }
     }
 
-    async function runEncryptTest() {
+    async function runEncrypt() {
       const keyPair = await importCurrentKeyPair();
       if (!keyPair) {
         return;
@@ -1078,8 +1084,7 @@
       }
 
       encryptBtn.disabled = true;
-      copyCipherBtn.disabled = true;
-      setTestStatus("正在加密并解密...");
+      setTestStatus("正在加密...");
 
       try {
         const encoded = new TextEncoder().encode(text);
@@ -1088,16 +1093,11 @@
           keyPair.publicKey,
           encoded
         );
-        const decrypted = await crypto.subtle.decrypt(
-          { name: "RSA-OAEP" },
-          keyPair.privateKey,
-          encrypted
-        );
 
         cipherText.value = arrayBufferToBase64(encrypted);
-        decryptedText.value = new TextDecoder().decode(decrypted);
-        copyCipherBtn.disabled = false;
-        setTestStatus(decryptedText.value === text ? "加解密测试通过。" : "已解密，但结果与明文不一致。", decryptedText.value !== text);
+        decryptedText.value = "";
+        refreshButtonState();
+        setTestStatus("明文加密完成。");
       } catch (error) {
         if (currentModulusLength) {
           const maxBytes = Math.floor(currentModulusLength / 8) - 66;
@@ -1107,6 +1107,39 @@
         }
       } finally {
         encryptBtn.disabled = false;
+        refreshButtonState();
+      }
+    }
+
+    async function runDecrypt() {
+      const keyPair = await importCurrentKeyPair();
+      if (!keyPair) {
+        return;
+      }
+
+      const cipher = cipherText.value.trim();
+      if (!cipher) {
+        setTestStatus("请输入密文 Base64。", true);
+        return;
+      }
+
+      decryptBtn.disabled = true;
+      setTestStatus("正在解密...");
+
+      try {
+        const decrypted = await crypto.subtle.decrypt(
+          { name: "RSA-OAEP" },
+          keyPair.privateKey,
+          base64ToArrayBuffer(cipher)
+        );
+
+        decryptedText.value = new TextDecoder().decode(decrypted);
+        setTestStatus("密文解密完成。");
+      } catch (error) {
+        setTestStatus("解密失败，请检查密文 Base64、私钥和算法是否匹配。", true);
+      } finally {
+        decryptBtn.disabled = false;
+        refreshButtonState();
       }
     }
 
@@ -1122,7 +1155,9 @@
       refreshButtonState();
     });
     plainText.addEventListener("input", updatePlainLength);
-    encryptBtn.addEventListener("click", runEncryptTest);
+    cipherText.addEventListener("input", refreshButtonState);
+    encryptBtn.addEventListener("click", runEncrypt);
+    decryptBtn.addEventListener("click", runDecrypt);
     copyCipherBtn.addEventListener("click", () => copyText(cipherText.value, "已复制密文 Base64。", true));
     copyPairBtn.addEventListener("click", async () => {
       const format = await chooseCopyFormat();
