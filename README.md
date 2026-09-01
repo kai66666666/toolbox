@@ -4,10 +4,10 @@
 
 ## 工具
 
-- `color.html`：颜色预览工具
-- `强类型密码生成器.html`：一次生成 10 个强类型密码
-- `时间戳转换工具.html`：Unix 时间戳与常用日期时间格式双向转换
-- `公私钥生成工具.html`：生成一组 RSA 公钥私钥，支持格式化复制、三种导出格式和加解密测试
+- `color-preview.html`：颜色预览工具
+- `password-generator.html`：一次生成 10 个强类型密码
+- `timestamp-converter.html`：Unix 时间戳与常用日期时间格式双向转换
+- `rsa-key-generator.html`：生成或输入一组 RSA 公钥私钥，支持格式化复制、三种导出格式和加解密测试
 
 ## GitHub Pages 发布方式
 

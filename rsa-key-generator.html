@@ -230,6 +230,25 @@
       font-weight: 700;
     }
 
+    .title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    .title-row .block-title {
+      margin-bottom: 0;
+    }
+
+    .length-info {
+      color: var(--muted);
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      white-space: nowrap;
+    }
+
     .meta-value {
       display: block;
       overflow-wrap: anywhere;
@@ -462,7 +481,7 @@
     <div class="header">
       <div>
         <h1>公私钥生成工具</h1>
-        <p class="subtitle">生成一组 RSA 公钥和私钥，支持 PEM 导出、纯文本复制和加解密测试。</p>
+        <p class="subtitle">生成或输入一组 RSA 公钥和私钥，支持 PEM 导出、纯文本复制和加解密测试。</p>
       </div>
       <a class="home" href="./index.html">返回首页</a>
     </div>
@@ -510,7 +529,7 @@
               <button class="small" id="downloadPublicBtn" type="button" disabled>导出公钥</button>
             </div>
           </div>
-          <textarea id="publicKeyText" readonly spellcheck="false"></textarea>
+          <textarea id="publicKeyText" spellcheck="false" placeholder="可粘贴完整 PUBLIC KEY PEM 或裸 Base64"></textarea>
         </div>
 
         <div class="block">
@@ -521,7 +540,7 @@
               <button class="small" id="downloadPrivateBtn" type="button" disabled>导出私钥</button>
             </div>
           </div>
-          <textarea id="privateKeyText" readonly spellcheck="false"></textarea>
+          <textarea id="privateKeyText" spellcheck="false" placeholder="可粘贴完整 PRIVATE KEY PEM 或裸 Base64"></textarea>
         </div>
       </div>
 
@@ -533,7 +552,10 @@
 
         <div class="test-grid">
           <div class="block">
-            <span class="block-title">明文</span>
+            <div class="title-row">
+              <span class="block-title">明文</span>
+              <span class="length-info" id="plainLength">0 字符 / 0 字节</span>
+            </div>
             <textarea id="plainText" spellcheck="false">hello toolbox</textarea>
           </div>
 
@@ -584,6 +606,7 @@
     const publicKeyText = document.getElementById("publicKeyText");
     const privateKeyText = document.getElementById("privateKeyText");
     const plainText = document.getElementById("plainText");
+    const plainLength = document.getElementById("plainLength");
     const cipherText = document.getElementById("cipherText");
     const decryptedText = document.getElementById("decryptedText");
     const encryptBtn = document.getElementById("encryptBtn");
@@ -618,6 +641,13 @@
         .replace(/^_+|_+$/g, "") || "rsa_key";
     }
 
+    function updatePlainLength() {
+      const text = plainText.value;
+      const chars = Array.from(text).length;
+      const bytes = new TextEncoder().encode(text).length;
+      plainLength.textContent = `${chars} 字符 / ${bytes} 字节`;
+    }
+
     function arrayBufferToBase64(buffer) {
       const bytes = new Uint8Array(buffer);
       let binary = "";
@@ -627,6 +657,18 @@
       });
 
       return btoa(binary);
+    }
+
+    function base64ToArrayBuffer(base64) {
+      const cleaned = base64.replace(/\s+/g, "");
+      const binary = atob(cleaned);
+      const bytes = new Uint8Array(binary.length);
+
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+      }
+
+      return bytes.buffer;
     }
 
     function formatPem(label, buffer) {
@@ -641,6 +683,73 @@
         .replace(/-----BEGIN [^-]+-----/g, "")
         .replace(/-----END [^-]+-----/g, "")
         .replace(/\s+/g, "");
+    }
+
+    function normalizeKeyText(value, label) {
+      const trimmed = value.trim();
+
+      if (!trimmed) {
+        return "";
+      }
+
+      if (trimmed.includes("-----BEGIN")) {
+        return `${trimmed}\n`;
+      }
+
+      return formatPem(label, base64ToArrayBuffer(trimmed));
+    }
+
+    function syncCurrentPem(showError = true) {
+      try {
+        const publicPem = normalizeKeyText(publicKeyText.value, "PUBLIC KEY");
+        const privatePem = normalizeKeyText(privateKeyText.value, "PRIVATE KEY");
+
+        currentPem = {
+          publicPem,
+          privatePem
+        };
+
+        return currentPem;
+      } catch (error) {
+        if (showError) {
+          setStatus("密钥格式无法识别，请输入完整 PEM 或裸 Base64。", true);
+        }
+
+        return null;
+      }
+    }
+
+    async function importCurrentKeyPair() {
+      const pem = syncCurrentPem(false);
+
+      if (!pem || !pem.publicPem || !pem.privatePem) {
+        setTestStatus("请同时输入公钥和私钥。", true);
+        return null;
+      }
+
+      try {
+        const publicKey = await crypto.subtle.importKey(
+          "spki",
+          base64ToArrayBuffer(stripPem(pem.publicPem)),
+          { name: "RSA-OAEP", hash: "SHA-256" },
+          true,
+          ["encrypt"]
+        );
+        const privateKey = await crypto.subtle.importKey(
+          "pkcs8",
+          base64ToArrayBuffer(stripPem(pem.privatePem)),
+          { name: "RSA-OAEP", hash: "SHA-256" },
+          true,
+          ["decrypt"]
+        );
+
+        currentKeyPair = { publicKey, privateKey };
+        currentModulusLength = publicKey.algorithm.modulusLength || currentModulusLength;
+        return currentKeyPair;
+      } catch (error) {
+        setTestStatus("密钥导入失败，请确认公私钥格式、算法和配对关系。", true);
+        return null;
+      }
     }
 
     function selectedKeyText(pem, format) {
@@ -658,9 +767,14 @@
     }
 
     function pairText(format = "pem", prefix = exportPrefix) {
+      const pem = syncCurrentPem();
+      if (!pem || !pem.publicPem || !pem.privatePem) {
+        return "";
+      }
+
       const names = fileNames(prefix);
-      const publicKey = selectedKeyText(currentPem.publicPem, format).trimEnd();
-      const privateKey = selectedKeyText(currentPem.privatePem, format).trimEnd();
+      const publicKey = selectedKeyText(pem.publicPem, format).trimEnd();
+      const privateKey = selectedKeyText(pem.privatePem, format).trimEnd();
       const label = format === "raw" ? "raw base64" : "pem";
 
       return [
@@ -673,34 +787,54 @@
     }
 
     function fullText(kind, prefix = exportPrefix) {
+      const pem = syncCurrentPem();
+      if (!pem) {
+        return "";
+      }
+
       const names = fileNames(prefix);
 
       if (kind === "public") {
-        return [`# ${names.publicName}`, currentPem.publicPem.trimEnd()].join("\n");
+        return [`# ${names.publicName}`, pem.publicPem.trimEnd()].join("\n");
       }
 
       if (kind === "private") {
-        return [`# ${names.privateName}`, currentPem.privatePem.trimEnd()].join("\n");
+        return [`# ${names.privateName}`, pem.privatePem.trimEnd()].join("\n");
       }
 
       return pairText("pem", prefix);
     }
 
     function exportText(kind, format, prefix) {
+      const pem = syncCurrentPem();
+      if (!pem) {
+        return "";
+      }
+
       if (kind === "public") {
-        if (format === "raw") {
-          return stripPem(currentPem.publicPem);
+        if (!pem.publicPem) {
+          setStatus("请先输入或生成公钥。", true);
+          return "";
         }
 
-        return format === "full" ? fullText("public", prefix) : currentPem.publicPem;
+        if (format === "raw") {
+          return stripPem(pem.publicPem);
+        }
+
+        return format === "full" ? fullText("public", prefix) : pem.publicPem;
       }
 
       if (kind === "private") {
-        if (format === "raw") {
-          return stripPem(currentPem.privatePem);
+        if (!pem.privatePem) {
+          setStatus("请先输入或生成私钥。", true);
+          return "";
         }
 
-        return format === "full" ? fullText("private", prefix) : currentPem.privatePem;
+        if (format === "raw") {
+          return stripPem(pem.privatePem);
+        }
+
+        return format === "full" ? fullText("private", prefix) : pem.privatePem;
       }
 
       return format === "full" ? fullText("pair", prefix) : pairText(format === "raw" ? "raw" : "pem", prefix);
@@ -863,6 +997,19 @@
       encryptBtn.disabled = !enabled;
     }
 
+    function refreshButtonState() {
+      const hasPublic = publicKeyText.value.trim().length > 0;
+      const hasPrivate = privateKeyText.value.trim().length > 0;
+
+      copyPublicBtn.disabled = !hasPublic;
+      downloadPublicBtn.disabled = !hasPublic;
+      copyPrivateBtn.disabled = !hasPrivate;
+      downloadPrivateBtn.disabled = !hasPrivate;
+      copyPairBtn.disabled = !(hasPublic && hasPrivate);
+      downloadPairBtn.disabled = !(hasPublic && hasPrivate);
+      encryptBtn.disabled = !(hasPublic && hasPrivate);
+    }
+
     async function generateKeys() {
       if (!window.crypto || !crypto.subtle) {
         setStatus("当前环境不支持 Web Crypto，请用 HTTPS 或 localhost 打开。", true);
@@ -909,7 +1056,7 @@
         currentModulusLength = size;
         publicKeyText.value = currentPem.publicPem;
         privateKeyText.value = currentPem.privatePem;
-        setButtons(true);
+        refreshButtonState();
         setStatus(`已生成一组 RSA-${size} 加解密密钥。`);
       } catch (error) {
         setStatus("生成失败，请检查浏览器是否支持 RSA-OAEP。", true);
@@ -919,8 +1066,8 @@
     }
 
     async function runEncryptTest() {
-      if (!currentKeyPair) {
-        setTestStatus("请先生成密钥。", true);
+      const keyPair = await importCurrentKeyPair();
+      if (!keyPair) {
         return;
       }
 
@@ -938,12 +1085,12 @@
         const encoded = new TextEncoder().encode(text);
         const encrypted = await crypto.subtle.encrypt(
           { name: "RSA-OAEP" },
-          currentKeyPair.publicKey,
+          keyPair.publicKey,
           encoded
         );
         const decrypted = await crypto.subtle.decrypt(
           { name: "RSA-OAEP" },
-          currentKeyPair.privateKey,
+          keyPair.privateKey,
           encrypted
         );
 
@@ -964,53 +1111,83 @@
     }
 
     generateBtn.addEventListener("click", generateKeys);
+    publicKeyText.addEventListener("input", () => {
+      currentKeyPair = null;
+      currentModulusLength = null;
+      refreshButtonState();
+    });
+    privateKeyText.addEventListener("input", () => {
+      currentKeyPair = null;
+      currentModulusLength = null;
+      refreshButtonState();
+    });
+    plainText.addEventListener("input", updatePlainLength);
     encryptBtn.addEventListener("click", runEncryptTest);
     copyCipherBtn.addEventListener("click", () => copyText(cipherText.value, "已复制密文 Base64。", true));
     copyPairBtn.addEventListener("click", async () => {
       const format = await chooseCopyFormat();
       if (format) {
-        copyText(pairText(format), "已按所选格式复制整组密钥。");
+        const text = pairText(format);
+        if (text) {
+          copyText(text, "已按所选格式复制整组密钥。");
+        }
       }
     });
 
     copyPublicBtn.addEventListener("click", async () => {
       const format = await chooseCopyFormat();
       if (format) {
-        copyText(selectedKeyText(currentPem.publicPem, format), "已按所选格式复制公钥。");
+        const pem = syncCurrentPem();
+        if (pem && pem.publicPem) {
+          copyText(selectedKeyText(pem.publicPem, format), "已按所选格式复制公钥。");
+        }
       }
     });
 
     copyPrivateBtn.addEventListener("click", async () => {
       const format = await chooseCopyFormat();
       if (format) {
-        copyText(selectedKeyText(currentPem.privatePem, format), "已按所选格式复制私钥。");
+        const pem = syncCurrentPem();
+        if (pem && pem.privatePem) {
+          copyText(selectedKeyText(pem.privatePem, format), "已按所选格式复制私钥。");
+        }
       }
     });
 
     downloadPairBtn.addEventListener("click", async () => {
       const options = await chooseExportOptions();
       if (options) {
-        downloadText(exportFilename("pair", options.format, options.prefix), exportText("pair", options.format, options.prefix));
-        setStatus("已按所选格式导出整组密钥。");
+        const text = exportText("pair", options.format, options.prefix);
+        if (text) {
+          downloadText(exportFilename("pair", options.format, options.prefix), text);
+          setStatus("已按所选格式导出整组密钥。");
+        }
       }
     });
 
     downloadPublicBtn.addEventListener("click", async () => {
       const options = await chooseExportOptions();
       if (options) {
-        downloadText(exportFilename("public", options.format, options.prefix), exportText("public", options.format, options.prefix));
-        setStatus("已按所选格式导出公钥。");
+        const text = exportText("public", options.format, options.prefix);
+        if (text) {
+          downloadText(exportFilename("public", options.format, options.prefix), text);
+          setStatus("已按所选格式导出公钥。");
+        }
       }
     });
 
     downloadPrivateBtn.addEventListener("click", async () => {
       const options = await chooseExportOptions();
       if (options) {
-        downloadText(exportFilename("private", options.format, options.prefix), exportText("private", options.format, options.prefix));
-        setStatus("已按所选格式导出私钥。");
+        const text = exportText("private", options.format, options.prefix);
+        if (text) {
+          downloadText(exportFilename("private", options.format, options.prefix), text);
+          setStatus("已按所选格式导出私钥。");
+        }
       }
     });
 
+    updatePlainLength();
     generateKeys();
   </script>
 </body>
